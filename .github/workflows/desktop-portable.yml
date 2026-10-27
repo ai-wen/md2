@@ -1,0 +1,90 @@
+name: Desktop portable (macOS)
+
+# Builds the md2 desktop app as a portable ("green") macOS zip - no installer,
+# no code signing / notarization: unzip, drag md2.app anywhere and run.
+# Mirrors the Windows portable (apps/desktop/scripts/collect-portable.ps1).
+#
+# Triggers:
+#   - Actions tab -> "Desktop portable (macOS)" -> Run workflow (pick a target)
+#   - push a tag starting with "portable-" (e.g. portable-v0.2.9):
+#     builds the default target and attaches the zip to a GitHub release
+#     created for that tag.
+#
+# Note: unsigned builds trip Gatekeeper on first open (right-click -> Open,
+# or `xattr -cr md2.app`); the README.txt inside the zip explains this.
+# "universal-apple-darwin" produces one app for both Apple Silicon and Intel.
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Rust target
+        type: choice
+        default: universal-apple-darwin
+        options:
+          - universal-apple-darwin
+          - aarch64-apple-darwin
+          - x86_64-apple-darwin
+  push:
+    tags: ['portable-*']
+
+concurrency:
+  group: desktop-portable-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TAURI_TARGET: ${{ inputs.target || 'universal-apple-darwin' }}
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install Rust targets
+        run: |
+          case "$TAURI_TARGET" in
+            universal-apple-darwin) rustup target add aarch64-apple-darwin x86_64-apple-darwin ;;
+            *) rustup target add "$TAURI_TARGET" ;;
+          esac
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+
+      - run: pnpm install --frozen-lockfile
+
+      # @md2/web (the Tauri frontend, built by beforeBuildCommand) imports
+      # @md2/core from its built dist/, so core must be built first.
+      - run: pnpm --filter @md2/core build
+
+      - name: Build Tauri app (.app bundle only, no dmg)
+        working-directory: apps/desktop
+        run: pnpm exec tauri build --bundles app --target "$TAURI_TARGET"
+
+      - name: Collect portable zip
+        working-directory: apps/desktop
+        run: bash scripts/collect-portable.sh "$TAURI_TARGET"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: md2-portable-macos
+          path: apps/desktop/portable/*.zip
+          if-no-files-found: error
+
+      - name: Attach zip to GitHub release (tag builds only)
+        if: startsWith(github.ref, 'refs/tags/portable-')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" --title "md2 $GITHUB_REF_NAME" --generate-notes
+          fi
+          gh release upload "$GITHUB_REF_NAME" apps/desktop/portable/*.zip --clobber

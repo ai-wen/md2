@@ -1,0 +1,23 @@
+[package]
+name = "md2-desktop"
+version = "0.2.9"
+description = "md2 desktop - Markdown to WeChat / Zhihu / Xiaohongshu / X, built with Tauri"
+edition = "2021"
+rust-version = "1.77.2"
+
+[lib]
+name = "md2_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 16
+opt-level = "s"
+panic = "abort"
+strip = true

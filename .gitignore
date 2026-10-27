@@ -1,0 +1,12 @@
+node_modules
+dist
+.DS_Store
+*.log
+out/
+.md2/
+coverage
+.vscode-test/
+apps/vscode/media/app/
+*.vsix
+apps/vscode/media/app
+.vscode-test
