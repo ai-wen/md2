@@ -1,0 +1,1 @@
+{"default":{"identifier":"default","description":"Default capability for the main window. Core permissions only; add plugin permissions here as plugins are introduced.","local":true,"windows":["main"],"permissions":["core:default"]}}
